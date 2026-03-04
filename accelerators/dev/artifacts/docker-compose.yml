@@ -1,0 +1,64 @@
+# Local development stack
+# Usage: docker compose up -d
+# Requires: Docker 20.10+ with Compose V2
+
+version: "3.9"
+
+services:
+  # ── Application ────────────────────────────────────────────────────────────
+  app:
+    build:
+      context: .
+      target: builder          # Use 'production' for a production-like test
+    image: <REPLACE_IMAGE_NAME>:dev
+    container_name: <REPLACE_PROJECT_NAME>-app
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      DATABASE_URL: postgres://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-pass}@db:5432/${POSTGRES_DB:-appdb}
+      # <REPLACE_ADDITIONAL_ENV_VARS>
+    volumes:
+      - .:/app
+      - /app/node_modules        # Anonymous volume so host node_modules are ignored
+    depends_on:
+      db:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+    restart: unless-stopped
+    command: npm run dev
+
+  # ── PostgreSQL ─────────────────────────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    container_name: <REPLACE_PROJECT_NAME>-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pass}
+      POSTGRES_DB: ${POSTGRES_DB:-appdb}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-user}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Redis ──────────────────────────────────────────────────────────────────
+  cache:
+    image: redis:7-alpine
+    container_name: <REPLACE_PROJECT_NAME>-cache
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  db-data:
